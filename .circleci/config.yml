@@ -1,0 +1,104 @@
+version: 2.1
+
+executors:
+  default:
+    working_directory: ~/workspace
+    docker:
+      - image: docker:18.06.3-ce-git
+
+commands:
+  restore_image:
+    parameters:
+      imagetag:
+        type: string
+    steps:
+      - restore_cache:
+          keys:
+            - v1-<< parameters.imagetag >>-{{ .Branch }}
+            - v1-<< parameters.imagetag >>
+          paths:
+            - /caches/app.tar
+      - run:
+          name: Load Docker image layer cache
+          command: |
+            set +o pipefail
+            docker load -i /caches/app.tar | true
+  save_image:
+    parameters:
+      imagetag:
+        type: string
+    steps:
+      - run:
+          name: Save Docker image layer cache
+          command: |
+            mkdir -p /caches
+            docker save -o /caches/app.tar app
+      - save_cache:
+          key: v1-<< parameters.imagetag >>-{{ .Branch }}-{{ epoch }}
+          paths:
+          - /caches/app.tar
+  docker_build:
+    parameters:
+      build_target:
+        type: string
+        default: << parameters.imagetag >>
+    steps:
+      - run:
+          name: Docker build
+          command: docker build << parameters.build_target >> --cache-from=app -t app
+  docker_push:
+    parameters:
+      imagetag:
+        type: string
+    steps:
+      - run:
+          name: Deploy docker image
+          command: |
+            docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+            docker tag app ${DOCKER_USER}/circleci:<< parameters.imagetag >>
+            docker push ${DOCKER_USER}/circleci:<< parameters.imagetag >>
+  build_image:
+    parameters:
+      imagetag:
+        type: string
+      build_target:
+        type: string
+    steps:
+      - checkout
+      - setup_remote_docker
+      - restore_image:
+          imagetag: << parameters.imagetag >>
+      - docker_build:
+          build_target: << parameters.build_target >>
+      - save_image:
+          imagetag: << parameters.imagetag >>
+      - docker_push:
+          imagetag: << parameters.imagetag >>
+
+jobs:
+  build_blog:
+    executor: default
+    steps:
+      - build_image:
+          imagetag: blog
+          build_target: blog
+  build_ubuntu1804:
+    executor: default
+    steps:
+      - build_image:
+          imagetag: ubuntu1804
+          build_target: base-ubuntu1804
+
+workflows:
+  build:
+    jobs:
+      - build_ubuntu1804:
+          filters:
+            branches:
+              only: /^base-ubuntu1804*/
+      - build_blog:
+          filters:
+            branches:
+              only: /^(blog|base-ubuntu1804)*/
+          requires:
+            - build_ubuntu1804
