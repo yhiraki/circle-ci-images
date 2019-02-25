@@ -99,6 +99,4 @@ workflows:
       - build_blog:
           filters:
             branches:
-              only: /^(blog|base-ubuntu1804)*/
-          requires:
-            - build_ubuntu1804
+              only: /^blog*/
