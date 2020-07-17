@@ -2,7 +2,7 @@ from yhiraki/emacs-minimal:26.1 as emacsimage
 
 from yhiraki/circleci:ubuntu1804
 
-env HUGO_VERSION=0.53 \
+env HUGO_VERSION=0.73.0 \
   DEBIAN_FRONTEND=noninteractive
 
 run apt-get update \
